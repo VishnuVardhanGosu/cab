@@ -7,15 +7,24 @@ from boto3.dynamodb.conditions import Key, Attr
 from decimal import Decimal
 import json
 
+# Print boto3 version for debugging
+print(f"Using boto3 version: {boto3.__version__}")
+
 app = Flask(__name__)
 app.secret_key = "your_secret_key"
 
 # Define AWS region explicitly
-AWS_REGION = 'ap-south-1'  # Replace with your preferred region
+AWS_REGION = 'ap-south-1'  # Mumbai region
+print(f"Using AWS region: {AWS_REGION}")
 
 # Initialize DynamoDB client with explicit region
-# When running on EC2 with an IAM role, boto3 will automatically use the instance profile credentials
-dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+try:
+    # When running on EC2 with an IAM role, boto3 will automatically use the instance profile credentials
+    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+    print("DynamoDB client initialized successfully")
+except Exception as e:
+    print(f"Error initializing DynamoDB client: {str(e)}")
+    raise
 
 # Global constant for car type prices per day
 PRICE_PER_DAY = {
@@ -26,72 +35,81 @@ PRICE_PER_DAY = {
 
 def init_db():
     """Initialize DynamoDB tables if they don't exist"""
-    tables = list(dynamodb.tables.all())
-    table_names = [table.name for table in tables]
-    
-    # Create Users table if it doesn't exist
-    if 'users' not in table_names:
-        users_table = dynamodb.create_table(
-            TableName='users',
-            KeySchema=[
-                {'AttributeName': 'id', 'KeyType': 'HASH'}  # Partition key
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'id', 'AttributeType': 'S'},
-                {'AttributeName': 'email', 'AttributeType': 'S'}
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    'IndexName': 'EmailIndex',
-                    'KeySchema': [
-                        {'AttributeName': 'email', 'KeyType': 'HASH'},
-                    ],
-                    'Projection': {
-                        'ProjectionType': 'ALL'
-                    },
-                    'ProvisionedThroughput': {
-                        'ReadCapacityUnits': 5,
-                        'WriteCapacityUnits': 5
+    try:
+        tables = list(dynamodb.tables.all())
+        print(f"Successfully connected to DynamoDB. Found {len(tables)} tables.")
+        table_names = [table.name for table in tables]
+        
+        # Create Users table if it doesn't exist
+        if 'users' not in table_names:
+            users_table = dynamodb.create_table(
+                TableName='users',
+                KeySchema=[
+                    {'AttributeName': 'id', 'KeyType': 'HASH'}  # Partition key
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'id', 'AttributeType': 'S'},
+                    {'AttributeName': 'email', 'AttributeType': 'S'}
+                ],
+                GlobalSecondaryIndexes=[
+                    {
+                        'IndexName': 'EmailIndex',
+                        'KeySchema': [
+                            {'AttributeName': 'email', 'KeyType': 'HASH'},
+                        ],
+                        'Projection': {
+                            'ProjectionType': 'ALL'
+                        },
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 5,
+                            'WriteCapacityUnits': 5
+                        }
                     }
-                }
-            ],
-            ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
-        )
-        # Wait until the table exists
-        users_table.meta.client.get_waiter('table_exists').wait(TableName='users')
-        print("users table created successfully!")
-    
-    # Create Bookings table if it doesn't exist
-    if 'Bookings' not in table_names:
-        bookings_table = dynamodb.create_table(
-            TableName='Bookings',
-            KeySchema=[
-                {'AttributeName': 'booking_id', 'KeyType': 'HASH'}  # Partition key
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'booking_id', 'AttributeType': 'S'},
-                {'AttributeName': 'user_id', 'AttributeType': 'S'}
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    'IndexName': 'UserIdIndex',
-                    'KeySchema': [
-                        {'AttributeName': 'user_id', 'KeyType': 'HASH'},
-                    ],
-                    'Projection': {
-                        'ProjectionType': 'ALL'
-                    },
-                    'ProvisionedThroughput': {
-                        'ReadCapacityUnits': 5,
-                        'WriteCapacityUnits': 5
+                ],
+                ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+            )
+            # Wait until the table exists
+            users_table.meta.client.get_waiter('table_exists').wait(TableName='users')
+            print("users table created successfully!")
+        else:
+            print("users table already exists.")
+        
+        # Create Bookings table if it doesn't exist
+        if 'Bookings' not in table_names:
+            bookings_table = dynamodb.create_table(
+                TableName='Bookings',
+                KeySchema=[
+                    {'AttributeName': 'booking_id', 'KeyType': 'HASH'}  # Partition key
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'booking_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'user_id', 'AttributeType': 'S'}
+                ],
+                GlobalSecondaryIndexes=[
+                    {
+                        'IndexName': 'UserIdIndex',
+                        'KeySchema': [
+                            {'AttributeName': 'user_id', 'KeyType': 'HASH'},
+                        ],
+                        'Projection': {
+                            'ProjectionType': 'ALL'
+                        },
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 5,
+                            'WriteCapacityUnits': 5
+                        }
                     }
-                }
-            ],
-            ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
-        )
-        # Wait until the table exists
-        bookings_table.meta.client.get_waiter('table_exists').wait(TableName='Bookings')
-        print("Bookings table created successfully!")
+                ],
+                ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+            )
+            # Wait until the table exists
+            bookings_table.meta.client.get_waiter('table_exists').wait(TableName='Bookings')
+            print("Bookings table created successfully!")
+        else:
+            print("Bookings table already exists.")
+    except Exception as e:
+        print(f"Error in init_db: {str(e)}")
+        raise
 
 # Initialize database when app starts
 try:
@@ -340,4 +358,4 @@ def logout():
     return redirect(url_for('home'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
