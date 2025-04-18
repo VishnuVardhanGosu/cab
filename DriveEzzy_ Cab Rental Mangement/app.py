@@ -10,9 +10,12 @@ import json
 app = Flask(__name__)
 app.secret_key = "your_secret_key"
 
-# Initialize DynamoDB client without credentials
+# Define AWS region explicitly
+AWS_REGION = 'ap-south-1'  # Replace with your preferred region
+
+# Initialize DynamoDB client with explicit region
 # When running on EC2 with an IAM role, boto3 will automatically use the instance profile credentials
-dynamodb = boto3.resource('dynamodb')
+dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 
 # Global constant for car type prices per day
 PRICE_PER_DAY = {
